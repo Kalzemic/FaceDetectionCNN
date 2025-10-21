@@ -4,8 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+from DetectorNet import DetectorNet
 from FaceDataset import FaceDataset, Collate_fn
-
+import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
@@ -13,8 +14,12 @@ import cv2
 import code
 
 
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+epochs = 25
 batchsize= 32
 learning_rate= .001
+l2lambda = 1e-4
+betas= (.9,.99)
 
 def getData():
     train_data_path = './images/train'
@@ -42,11 +47,15 @@ def getData():
     for idx, file in enumerate(os.listdir(train_labels_path)):
         if idx > 1000: break
         label= np.loadtxt(open(os.path.join(train_labels_path,file),'rb'),dtype=np.float32)
+        if label.ndim == 1:
+            label = np.expand_dims(label, axis=0)
         train_labels.append(label)
     
     for idx, file in enumerate(os.listdir(val_labels_path)):
         if idx > 1000: break
         label = np.loadtxt(open(os.path.join(val_labels_path,file),'rb'),dtype=np.float32)
+        if label.ndim == 1:
+            label = np.expand_dims(label, axis=0)
         val_labels.append(label)
 
     return np.stack(train_data), np.stack(val_data), train_labels, val_labels
@@ -71,8 +80,79 @@ def getTorchLoaders(train_data, val_data, train_labels, val_labels):
 
 
 
+def buildTrainingTarget(labels, S=7, B=2):
+
+    batch_size = len(labels)
+    target  = torch.zeros(batch_size,B*6,S,S)
+
+    for i,boxlist in enumerate(labels):
+        box = boxlist[0]
+        cls, x, y, w, h = box.tolist()
+
+        cell_x =int(x * S)
+        cell_y = int(y * S)
+
+        x_cell = x*S - cell_x #subtract floor
+        y_cell = y*S - cell_y 
+
+        target[i,0:6,cell_y,cell_x] = torch.tensor([
+            x_cell, y_cell,w ,h, 1.0, 1.0
+        ])
+    return target
 
 
+
+
+def trainDetectorNet(net, criterion, optimizer):
+    
+    trainLosses = np.zeros(epochs)
+    valLosses = np.zeros(epochs)
+
+    for epoch in range(epochs):
+        
+        net.train()
+        batchLosses = []
+        for x,y in train_loader:
+            
+            #preprocess data and GPU integration
+            x= x.to(device)
+            target = buildTrainingTarget(y)
+            target = target.to(device)
+
+            #forward
+            output = net(x)
+
+            #calc loss
+            loss = criterion(output, target)
+
+            #backprop
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            batchLosses.append(loss.item())
+        
+        trainLosses[epoch] = np.mean(batchLosses)
+
+        net.eval()
+        batchLosses = []
+        for x,y in val_loader:
+            
+            x= x.to(device)
+            target = buildTrainingTarget(y)
+            target = target.to(device)
+
+            output = net(x)
+            loss = criterion(output,target)
+            batchLosses.append(loss.item())
+        
+        valLosses[epoch] = np.mean(batchLosses)
+    
+    return net, trainLosses, valLosses
+
+
+
+    
 
 
 
@@ -83,8 +163,26 @@ if __name__ == '__main__':
     train_data, val_data, train_labels, val_labels = getData()
     
     train_loader , val_loader = getTorchLoaders(train_data, val_data, train_labels, val_labels)
-    
 
+
+
+    net = DetectorNet()
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(net.parameters(),lr=learning_rate)
+
+
+    #run loss example 
+
+    # x,y = next(iter(val_loader))
+    # output = net(x)
+    
+    # target = buildTrainingTarget(y)
+
+    # loss = criterion(output,target)
+
+    net = net.to(device)
+
+    net, trainLoss, valLoss = trainDetectorNet(net, criterion, optimizer)
 
 
     code.interact(local=locals())
