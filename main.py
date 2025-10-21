@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 
 from DetectorNet import DetectorNet
 from FaceDataset import FaceDataset, Collate_fn
+from DetectorLoss import DetectorLoss
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
@@ -15,7 +16,7 @@ import code
 
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-epochs = 25
+epochs = 85
 batchsize= 8
 learning_rate= .001
 #l2lambda = 1e-4
@@ -32,31 +33,87 @@ def getData():
     train_labels = []
     val_labels = []
 
-    for idx, file in enumerate(os.listdir(train_data_path)):
-        if idx > 1000: break
-        img = cv2.imread(os.path.join(train_data_path,file))
+    label_files = sorted(os.listdir(train_labels_path))
+
+    for idx, label_file in enumerate(label_files):
+        if idx > 1000: break 
+
+        base_name= os.path.splitext(label_file)[0]
+        image_file = base_name + '.jpg'
+
+        # Load Label
+        label_path = os.path.join(train_labels_path, label_file)
+        label = np.loadtxt(open(label_path, 'rb'), dtype=np.float32)
+        if label.ndim == 1:
+            label = np.expand_dims(label, axis=0)
+        
+        # Load Image
+        img_path = os.path.join(train_data_path, image_file)
+        if not os.path.exists(img_path):
+            print(f"Warning: Image {image_file} not found for label {label_file}. Skipping.")
+            continue # Skip this label if the image is missing
+
+        img = cv2.imread(img_path)
         img = cv2.cvtColor(cv2.resize(img,(224,224)),cv2.COLOR_BGR2RGB)
+        
         train_data.append(img)
-    
-    for idx, file in enumerate(os.listdir(val_data_path)):
-        if idx > 1000: break
-        img = cv2.imread(os.path.join(val_data_path,file))
-        img = cv2.cvtColor(cv2.resize(img,(224,224)),cv2.COLOR_BGR2RGB)
-        val_data.append(img)
-    
-    for idx, file in enumerate(os.listdir(train_labels_path)):
-        if idx > 1000: break
-        label= np.loadtxt(open(os.path.join(train_labels_path,file),'rb'),dtype=np.float32)
-        if label.ndim == 1:
-            label = np.expand_dims(label, axis=0)
         train_labels.append(label)
-    
-    for idx, file in enumerate(os.listdir(val_labels_path)):
-        if idx > 1000: break
-        label = np.loadtxt(open(os.path.join(val_labels_path,file),'rb'),dtype=np.float32)
+
+    label_files = sorted(os.listdir(val_labels_path))
+
+    for idx, label_file in enumerate(label_files):
+        if idx > 1000: break 
+
+        base_name= os.path.splitext(label_file)[0]
+        image_file = base_name + '.jpg'
+
+        # Load Label
+        label_path = os.path.join(val_labels_path, label_file)
+        label = np.loadtxt(open(label_path, 'rb'), dtype=np.float32)
         if label.ndim == 1:
             label = np.expand_dims(label, axis=0)
+        
+        # Load Image
+        img_path = os.path.join(val_data_path, image_file)
+        if not os.path.exists(img_path):
+            print(f"Warning: Image {image_file} not found for label {label_file}. Skipping.")
+            continue # Skip this label if the image is missing
+
+        img = cv2.imread(img_path)
+        img = cv2.cvtColor(cv2.resize(img,(224,224)),cv2.COLOR_BGR2RGB)
+        
+        val_data.append(img)
         val_labels.append(label)
+    
+    
+    return np.stack(train_data), np.stack(val_data), train_labels, val_labels
+
+
+    # for idx, file in enumerate(os.listdir(train_data_path)):
+    #     if idx > 1000: break
+    #     img = cv2.imread(os.path.join(train_data_path,file))
+    #     img = cv2.cvtColor(cv2.resize(img,(224,224)),cv2.COLOR_BGR2RGB)
+    #     train_data.append(img)
+    
+    # for idx, file in enumerate(os.listdir(val_data_path)):
+    #     if idx > 1000: break
+    #     img = cv2.imread(os.path.join(val_data_path,file))
+    #     img = cv2.cvtColor(cv2.resize(img,(224,224)),cv2.COLOR_BGR2RGB)
+    #     val_data.append(img)
+    
+    # for idx, file in enumerate(os.listdir(train_labels_path)):
+    #     if idx > 1000: break
+    #     label= np.loadtxt(open(os.path.join(train_labels_path,file),'rb'),dtype=np.float32)
+    #     if label.ndim == 1:
+    #         label = np.expand_dims(label, axis=0)
+    #     train_labels.append(label)
+    
+    # for idx, file in enumerate(os.listdir(val_labels_path)):
+    #     if idx > 1000: break
+    #     label = np.loadtxt(open(os.path.join(val_labels_path,file),'rb'),dtype=np.float32)
+    #     if label.ndim == 1:
+    #         label = np.expand_dims(label, axis=0)
+    #     val_labels.append(label)
 
     return np.stack(train_data), np.stack(val_data), train_labels, val_labels
 
@@ -82,25 +139,28 @@ def getTorchLoaders(train_data, val_data, train_labels, val_labels):
 
 def buildTrainingTarget(labels, S=7, B=2):
 
+    c_params = 6
     batch_size = len(labels)
     target  = torch.zeros(batch_size,B*6,S,S)
 
     for i,boxlist in enumerate(labels):
-        box = boxlist[0]
-        cls, x, y, w, h = box.tolist()
+        for box in boxlist:
+            cls, x, y, w, h = box.tolist()
 
-        cell_x =int(x * S)
-        cell_y = int(y * S)
+            cell_x =int(x * S)
+            cell_y = int(y * S)
 
-        x_cell = x*S - cell_x #subtract floor
-        y_cell = y*S - cell_y 
-
-        target[i,0:6,cell_y,cell_x] = torch.tensor([
-            x_cell, y_cell,w ,h, 1.0, 1.0
-        ])
+            x_cell = x*S - cell_x #subtract floor
+            y_cell = y*S - cell_y 
+            # for b in range(B):
+            #     idx = b*c_params
+            #     target[i,idx: idx + c_params ,cell_y,cell_x] = torch.tensor([
+            #         x_cell, y_cell,w ,h, 1.0, 1.0
+            #     ])
+            target[i,0 : c_params , cell_y, cell_x] = torch.tensor ([
+                    x_cell, y_cell,w ,h, 1.0, 1.0
+            ])
     return target
-
-
 
 
 def trainDetectorNet(net, criterion, optimizer):
@@ -169,7 +229,7 @@ if __name__ == '__main__':
 
 
     net = DetectorNet()
-    criterion = nn.MSELoss()
+    criterion = DetectorLoss()
     optimizer = torch.optim.Adam(net.parameters(),lr=learning_rate)
 
 

@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 
 class DetectorNet(nn.Module):
-    def __init__(self):
+    def __init__(self, B=2, S=7):
         super().__init__()
 
-        self.B = 2
-        self.S = 7
+        self.B = B
+        self.S = S
 
         self.num_classes = 1
         self.features = nn.Sequential(
