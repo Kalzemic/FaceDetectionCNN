@@ -16,10 +16,10 @@ import code
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 epochs = 25
-batchsize= 32
+batchsize= 8
 learning_rate= .001
-l2lambda = 1e-4
-betas= (.9,.99)
+#l2lambda = 1e-4
+#adam_betas= (.9,.99)
 
 def getData():
     train_data_path = './images/train'
@@ -147,7 +147,9 @@ def trainDetectorNet(net, criterion, optimizer):
             batchLosses.append(loss.item())
         
         valLosses[epoch] = np.mean(batchLosses)
-    
+
+
+       
     return net, trainLosses, valLosses
 
 
@@ -184,6 +186,16 @@ if __name__ == '__main__':
 
     net, trainLoss, valLoss = trainDetectorNet(net, criterion, optimizer)
 
+    fig,axs = plt.subplots(1,2)
+    axs[0].plot(range(epochs),trainLoss)
+    axs[0].set_title('Train Losses by Epochs')
+    axs[0].set_xticks([])
+    axs[0].set_yticks([])
+    axs[1].plot(range(epochs),valLoss)
+    axs[1].set_title('Validation Losses by Epochs')
+    axs[1].set_xticks([])
+    axs[1].set_yticks([])
+    plt.show()
 
     code.interact(local=locals())
 
