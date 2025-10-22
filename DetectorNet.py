@@ -26,11 +26,12 @@ class DetectorNet(nn.Module):
             nn.BatchNorm2d(512),
             nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=(2,2),stride=(2,2)), # 28 / 2 = 14
+            # nn.Dropout(p=.1),
             nn.Conv2d(512,1024,kernel_size=3,padding=1), #14
             nn.BatchNorm2d(1024),
             nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=(2,2),stride=(2,2)), #7
-            nn.Dropout(p=.1) 
+            nn.Dropout(p=.2) 
 
         )
     

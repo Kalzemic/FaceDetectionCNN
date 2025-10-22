@@ -18,7 +18,7 @@ import code
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 epochs = 85
 batchsize= 8
-learning_rate= .001
+learning_rate= 5e-4
 #l2lambda = 1e-4
 #adam_betas= (.9,.99)
 
@@ -88,34 +88,6 @@ def getData():
     
     return np.stack(train_data), np.stack(val_data), train_labels, val_labels
 
-
-    # for idx, file in enumerate(os.listdir(train_data_path)):
-    #     if idx > 1000: break
-    #     img = cv2.imread(os.path.join(train_data_path,file))
-    #     img = cv2.cvtColor(cv2.resize(img,(224,224)),cv2.COLOR_BGR2RGB)
-    #     train_data.append(img)
-    
-    # for idx, file in enumerate(os.listdir(val_data_path)):
-    #     if idx > 1000: break
-    #     img = cv2.imread(os.path.join(val_data_path,file))
-    #     img = cv2.cvtColor(cv2.resize(img,(224,224)),cv2.COLOR_BGR2RGB)
-    #     val_data.append(img)
-    
-    # for idx, file in enumerate(os.listdir(train_labels_path)):
-    #     if idx > 1000: break
-    #     label= np.loadtxt(open(os.path.join(train_labels_path,file),'rb'),dtype=np.float32)
-    #     if label.ndim == 1:
-    #         label = np.expand_dims(label, axis=0)
-    #     train_labels.append(label)
-    
-    # for idx, file in enumerate(os.listdir(val_labels_path)):
-    #     if idx > 1000: break
-    #     label = np.loadtxt(open(os.path.join(val_labels_path,file),'rb'),dtype=np.float32)
-    #     if label.ndim == 1:
-    #         label = np.expand_dims(label, axis=0)
-    #     val_labels.append(label)
-
-    return np.stack(train_data), np.stack(val_data), train_labels, val_labels
 
 
 def getTorchLoaders(train_data, val_data, train_labels, val_labels):
@@ -229,7 +201,7 @@ if __name__ == '__main__':
 
 
     net = DetectorNet()
-    criterion = DetectorLoss()
+    criterion = DetectorLoss(lambda_coord=3)
     optimizer = torch.optim.Adam(net.parameters(),lr=learning_rate)
 
 
