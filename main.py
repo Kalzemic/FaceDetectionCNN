@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from DetectorNet import DetectorNet
+from DetectorNet import DetectorNet, DetectorNetPool
 from FaceDataset import FaceDataset, Collate_fn
 from DetectorLoss import DetectorLoss
 import matplotlib.pyplot as plt
@@ -16,7 +16,7 @@ import code
 
 
 device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-epochs = 85
+epochs = 100
 batchsize= 8
 learning_rate= 5e-4
 #l2lambda = 1e-4
